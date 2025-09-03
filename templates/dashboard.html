@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oracle-Hive Sync Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .metric-card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+        
+        .metric-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+        
+        .status-critical { background: #fee; color: #d00; }
+        .status-warning { background: #ffeaa7; color: #d68910; }
+        .status-minor { background: #fff3cd; color: #856404; }
+        .status-ok { background: #d4edda; color: #155724; }
+        
+        .chart-section {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .chart-section h2 {
+            margin-bottom: 1.5rem;
+            color: #333;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        
+        .ai-section {
+            background: white;
+            border-radius: 10px;
+            padding: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .ai-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .ai-header h2 {
+            margin-left: 0.5rem;
+        }
+        
+        .recommendation-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .recommendation-list li {
+            padding: 1rem;
+            margin: 0.5rem 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .risk-score {
+            font-size: 3rem;
+            font-weight: 700;
+            text-align: center;
+            margin: 1rem 0;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        
+        .error {
+            background: #fee;
+            color: #d00;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+        
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        
+        .refresh-btn:hover {
+            background: #5a67d8;
+        }
+        
+        .timestamp {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>🔍 Oracle-Hive Sync Monitor</h1>
+            <p>Real-time monitoring of data synchronization health</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Key Metrics Cards -->
+        <div class="metrics-grid" id="metricsGrid">
+            <div class="loading">Loading metrics...</div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="chart-section">
+            <h2>📊 Sync Analytics</h2>
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <canvas id="syncGaugeChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="issuesChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="severityChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Triage Section -->
+        <div class="ai-section">
+            <div class="ai-header">
+                <span style="font-size: 2rem;">🤖</span>
+                <h2>AI Triage Analysis</h2>
+                <button class="refresh-btn" onclick="refreshData()" style="margin-left: auto;">Refresh</button>
+            </div>
+            <div id="aiAnalysis">
+                <div class="loading">Running AI analysis...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chart instances
+        let charts = {};
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshData();
+            // Auto-refresh every 30 seconds
+            setInterval(refreshData, 30000);
+        });
+
+        async function refreshData() {
+            await Promise.all([
+                fetchMetrics(),
+                fetchChartData(),
+                fetchAIAnalysis()
+            ]);
+        }
+
+        async function fetchMetrics() {
+            try {
+                const response = await fetch('/api/metrics');
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayMetrics(result.data);
+                } else {
+                    showError('metricsGrid', result.error);
+                }
+            } catch (error) {
+                showError('metricsGrid', 'Failed to fetch metrics');
+            }
+        }
+
+        function displayMetrics(metrics) {
+            const grid = document.getElementById('metricsGrid');
+            
+            const cards = [
+                {
+                    label: 'Sync Gap',
+                    value: `${metrics.sync_gap.gap_percent}%`,
+                    status: metrics.sync_gap.severity,
+                    detail: `${metrics.sync_gap.gap_count} records behind`
+                },
+                {
+                    label: 'Data Freshness',
+                    value: `${metrics.data_freshness.data_lag_days}d`,
+                    status: metrics.data_freshness.severity,
+                    detail: 'Days behind'
+                },
+                {
+                    label: 'Duplicates',
+                    value: metrics.duplicates.duplicate_count,
+                    status: metrics.duplicates.severity,
+                    detail: 'Duplicate records'
+                },
+                {
+                    label: 'Missing Partitions',
+                    value: metrics.missing_partitions.missing_count,
+                    status: metrics.missing_partitions.severity,
+                    detail: 'Partitions missing'
+                },
+                {
+                    label: 'Overall Health',
+                    value: metrics.overall_health,
+                    status: metrics.overall_health === 'HEALTHY' ? 'ok' : 'warning',
+                    detail: 'System status'
+                }
+            ];
+
+            grid.innerHTML = cards.map(card => `
+                <div class="metric-card">
+                    <div class="metric-label">${card.label}</div>
+                    <div class="metric-value">${card.value}</div>
+                    <div>${card.detail}</div>
+                    <span class="status-badge status-${card.status.toLowerCase()}">${card.status}</span>
+                </div>
+            `).join('');
+        }
+
+        async function fetchChartData() {
+            try {
+                const response = await fetch('/api/chart-data');
+                const result = await response.json();
+                
+                if (result.success) {
+                    updateCharts(result.data);
+                }
+            } catch (error) {
+                console.error('Failed to fetch chart data:', error);
+            }
+        }
+
+        function updateCharts(data) {
+            // Sync Gauge Chart
+            createOrUpdateChart('syncGaugeChart', {
+                type: 'doughnut',
+                data: {
+                    labels: ['Synced', 'Gap'],
+                    datasets: [{
+                        data: [data.syncGauge.hive, data.syncGauge.oracle - data.syncGauge.hive],
+                        backgroundColor: ['#4caf50', '#f44336'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Sync Status: ${data.syncGauge.gapPercent}% Gap`
+                        },
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Issues Breakdown Chart
+            createOrUpdateChart('issuesChart', {
+                type: 'bar',
+                data: {
+                    labels: data.issueBreakdown.labels,
+                    datasets: [{
+                        label: 'Issue Count',
+                        data: data.issueBreakdown.values,
+                        backgroundColor: ['#f44336', '#ff9800', '#ffc107', '#4caf50']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Issues Breakdown'
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Severity Distribution
+            createOrUpdateChart('severityChart', {
+                type: 'pie',
+                data: {
+                    labels: data.severityDistribution.labels,
+                    datasets: [{
+                        data: data.severityDistribution.values,
+                        backgroundColor: ['#f44336', '#ff9800', '#ffc107', '#4caf50']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Severity Distribution'
+                        }
+                    }
+                }
+            });
+
+            // Trend Chart
+            createOrUpdateChart('trendChart', {
+                type: 'line',
+                data: {
+                    labels: data.trend.labels,
+                    datasets: [{
+                        label: 'Sync Gap %',
+                        data: data.trend.syncGap,
+                        borderColor: '#f44336',
+                        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '7-Day Sync Gap Trend'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            suggestedMax: 20
+                        }
+                    }
+                }
+            });
+        }
+
+        function createOrUpdateChart(canvasId, config) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            
+            if (charts[canvasId]) {
+                charts[canvasId].destroy();
+            }
+            
+            charts[canvasId] = new Chart(ctx, config);
+        }
+
+        async function fetchAIAnalysis() {
+            try {
+                const response = await fetch('/api/triage');
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayAIAnalysis(result.data);
+                } else {
+                    showError('aiAnalysis', result.error);
+                }
+            } catch (error) {
+                showError('aiAnalysis', 'Failed to fetch AI analysis');
+            }
+        }
+
+        function displayAIAnalysis(analysis) {
+            const container = document.getElementById('aiAnalysis');
+            
+            const severityColor = {
+                'CRITICAL': '#d00',
+                'HIGH': '#ff6b6b',
+                'MEDIUM': '#feca57',
+                'LOW': '#48dbfb'
+            };
+            
+            container.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
+                    <div style="text-align: center;">
+                        <h3>Risk Score</h3>
+                        <div class="risk-score" style="color: ${severityColor[analysis.severity] || '#666'}">
+                            ${analysis.risk_score}/100
+                        </div>
+                        <span class="status-badge status-${analysis.severity.toLowerCase()}">
+                            ${analysis.severity} SEVERITY
+                        </span>
+                        <p style="margin-top: 1rem; font-size: 0.9rem;">
+                            Est. Fix Time: ${analysis.estimated_fix_time}
+                        </p>
+                    </div>
+                    <div>
+                        <h3>Root Cause Analysis</h3>
+                        <p style="margin: 1rem 0; font-style: italic;">"${analysis.root_cause}"</p>
+                        
+                        <h3>Priority Action</h3>
+                        <p style="margin: 1rem 0; font-weight: 600;">${analysis.priority_action}</p>
+                        
+                        <h3>Recommendations</h3>
+                        <ul class="recommendation-list">
+                            ${analysis.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        </ul>
+                        
+                        <div class="timestamp">
+                            Analysis by ${analysis.model_used} at ${new Date(analysis.analysis_timestamp).toLocaleString()}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showError(elementId, message) {
+            document.getElementById(elementId).innerHTML = `
+                <div class="error">Error: ${message}</div>
+            `;
+        }
+    </script>
+</body>
+</html>
